@@ -276,7 +276,7 @@ const text = define<TextG>({
   layout(s) {
     const wave = topWave(`${s.id}-w`);
     const hlTop = waveBottom(wave) + 56;
-    const hl = headlineFit(s.headline ?? '', s.headlineStyle, { maxWidth: TW, maxLines: 3, maxSize: 108, maxHeight: 360 });
+    const hl = headlineFit(s.headline ?? '', s.headlineStyle, { maxWidth: TW, maxLines: 4, maxSize: 108, maxHeight: 360 });
     const ruleY = hlTop + hl.height + 28;
     const bodyTop = ruleY + 10 + 40;
     const bodyH = FOOTER_LIMIT - bodyTop;
@@ -458,8 +458,8 @@ const list = define<ListG>({
   layout(s) {
     const wave = topWave(`${s.id}-w`);
     const hlTop = waveBottom(wave) + 56;
-    const hl = headlineFit(s.headline ?? '', 'standard', { maxWidth: TW, maxLines: 2, maxSize: 104, maxHeight: 240 });
-    const top = hlTop + hl.height + 64;
+    const hl = headlineFit(s.headline ?? '', 'standard', { maxWidth: TW, maxLines: 3, maxSize: 104, maxHeight: 270 });
+    const top = hlTop + hl.height + 56;
     const items = (s.bullets ?? []).filter(has);
     const markerSize = 48;
     const indent = markerSize + 28;
@@ -471,7 +471,7 @@ const list = define<ListG>({
       const total = fits.reduce((h, f) => h + f.height, 0) + gap * Math.max(0, fits.length - 1);
       if (fits.every((f) => f.fits) && total <= maxH) break;
     }
-    const texts: TextBox[] = [box('headline', hl, P, hlTop, TW, 240, colors.waldgruen)];
+    const texts: TextBox[] = [box('headline', hl, P, hlTop, TW, 270, colors.waldgruen)];
     const markers: number[] = [];
     let y = top;
     fits.forEach((f, i) => {
@@ -514,10 +514,10 @@ const cta = define<CtaG>({
       texts.push(box('subline', sub, P, y + 24, TW, sub.lineHeightPx * 3, colors.schwarz));
       y += 24 + sub.height;
     }
-    const padX = 44;
+    const padX = 40;
     const padY = 24;
-    const maxBtnW = 430;
-    const btn = fitText(s.button ?? '', { font: 'bold', maxWidth: maxBtnW - 2 * padX, maxLines: 1, maxSize: 42, minSize: 32, lineHeight: 1.2 });
+    const maxBtnW = 520;
+    const btn = fitText(s.button ?? '', { font: 'bold', maxWidth: maxBtnW - 2 * padX, maxLines: 1, maxSize: 42, minSize: 30, lineHeight: 1.2 });
     const button = { x: P, y: y + 52, w: Math.min(maxBtnW, btn.width + 2 * padX), h: btn.height + 2 * padY };
     texts.push(box('button', btn, P + padX, button.y + padY, maxBtnW - 2 * padX, btn.lineHeightPx, colors.weiss));
     const url = fitText(website, { font: 'bold', maxWidth: maxBtnW, maxLines: 1, maxSize: 40, minSize: 40, lineHeight: 1.2 });
@@ -526,7 +526,8 @@ const cta = define<CtaG>({
     const blobTop = Math.max(y + 40, 470);
     const blobBottom = LOGO_TOP - 2 * logoX;
     const bh = Math.max(440, blobBottom - blobTop);
-    const blob = { x: 540, y: blobBottom - bh, w: 620, h: bh };
+    const bx = Math.max(540, button.x + button.w + 48);
+    const blob = { x: bx, y: blobBottom - bh, w: 620, h: bh };
     return { texts, g: { button, blob } };
   },
   render(s, L, a) {
