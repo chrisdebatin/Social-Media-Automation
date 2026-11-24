@@ -103,3 +103,6 @@ textarea { resize: vertical; min-height: 60px; }
 .modal-bg { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
 .modal { background: var(--weiss); border-radius: 14px; padding: 22px; max-width: 520px; width: 100%; max-height: 90vh; overflow: auto; }
 .draft-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--grau15); }
+
+.idea { border: 2px solid var(--grau15); border-radius: 10px; padding: 10px; background: var(--weiss); }
+.idea:hover { border-color: var(--apfelgruen); }

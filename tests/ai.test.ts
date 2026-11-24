@@ -7,7 +7,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }));
 
-import { generateCarousel, htmlToText, rewriteSlide } from '../lib/ai';
+import { generateCarousel, htmlToText, rewriteSlide, suggestTopics } from '../lib/ai';
 
 const blank = { headline: '', subline: '', body: '', accent: '', quote: '', author: '', button: '', bullets: [], headlineStyle: 'standard', photoIndex: -1, imagePrompt: '' };
 const carousel = (sublineCover: string) => ({
@@ -88,5 +88,18 @@ describe('article import', () => {
     expect(text).toContain('Düsseldorf');
     expect(text).not.toContain('Menü');
     expect(text).not.toContain('x()');
+  });
+});
+
+describe('topic ideas', () => {
+  beforeEach(() => create.mockReset());
+  const idea = (hook: string) => ({ title: 'Sturzprävention im Winter', audience: 'angehoerige', hook, briefing: 'Tipps gegen Stürze bei Glätte: Licht, Schuhe, Hilfsmittel. CTA: Beratung durch unsere Pflegeberater:innen.', format: 'Cover → Liste → CTA', photoIdea: 'Pflegekraft begleitet Kundin beim Spaziergang' });
+  it('returns ideas and self-corrects formal address', async () => {
+    create.mockResolvedValueOnce({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'a', name: 'themen_ausgeben', input: { ideas: [idea('Schützen Sie Ihre Eltern')] } }] });
+    create.mockResolvedValueOnce({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'b', name: 'themen_ausgeben', input: { ideas: [idea('So bleibt dein Papa sicher auf den Beinen')] } }] });
+    const ideas = await suggestTopics({ count: 3, people: [] }, new Date('2026-11-24'));
+    expect(ideas[0].hook).toContain('dein');
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[0][0].messages[0].content).toContain('November');
   });
 });

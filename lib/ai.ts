@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { audiences, headlineStyles, requiredHashtag, toneGuide, type AudienceId } from './brand';
 import { factsAsText } from './facts';
 import { CAPTION_MAX, newId, templateCatalog, templateIds, type Carousel, type Slide, type TemplateId } from './schema';
-import { errorsOnly, formatIssues, validateCarousel, validateSlide, type Issue } from './validate';
+import { errorsOnly, findFormalAddress, findUnbackedNumbers, formatIssues, validateCarousel, validateSlide, type Issue } from './validate';
 import { layoutSlide, overflowingSlots } from './templates';
 
 export const MAX_ATTEMPTS = 3;
@@ -358,6 +358,94 @@ export async function rewriteSlide(
 }
 
 export { RefusalError };
+
+/* ------------------------------------------------------ topic ideas */
+
+export const ideasInputSchema = z.object({
+  audience: z.enum(Object.keys(audiences) as [AudienceId, ...AudienceId[]]).optional(),
+  location: z.string().max(80).optional(),
+  hint: z.string().max(500).optional(),
+  count: z.number().int().min(3).max(10).default(6),
+  /** team members with cutouts available ("Kennst du schon …") */
+  people: z.array(z.string()).max(50).default([]),
+});
+export type IdeasInput = z.infer<typeof ideasInputSchema>;
+
+export interface TopicIdea {
+  title: string;
+  audience: AudienceId;
+  hook: string;
+  briefing: string;
+  format: string;
+  photoIdea: string;
+}
+
+const ideaSchema = z.object({
+  title: z.string().min(3).max(80),
+  audience: z.enum(Object.keys(audiences) as [AudienceId, ...AudienceId[]]),
+  hook: z.string().min(3).max(120),
+  briefing: z.string().min(20).max(700),
+  format: z.string().max(120),
+  photoIdea: z.string().max(300),
+});
+
+const ideasTool: BetaTool = {
+  name: 'themen_ausgeben',
+  description: 'Gibt die Themenvorschläge für Instagram-Karussells aus. Immer genau einmal aufrufen.',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    properties: {
+      ideas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Arbeitstitel, max. 80 Zeichen' },
+            audience: { type: 'string', enum: Object.keys(audiences) },
+            hook: { type: 'string', description: 'Möglicher Hook für Slide 1, per du, max. 60 Zeichen' },
+            briefing: { type: 'string', description: 'Briefing für die Karussell-Erstellung (Kerngedanke, 3–6 Inhaltspunkte, Call to Action), max. 700 Zeichen' },
+            format: { type: 'string', description: 'Vorgeschlagener Aufbau, z. B. "Cover → 3× Erklärung → Liste → CTA"' },
+            photoIdea: { type: 'string', description: 'Welches Foto passt (echtes Teamfoto bevorzugt) – kurz, auf Deutsch' },
+          },
+          required: ['title', 'audience', 'hook', 'briefing', 'format', 'photoIdea'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['ideas'],
+    additionalProperties: false,
+  } as BetaTool['input_schema'],
+};
+
+export async function suggestTopics(input: IdeasInput, today = new Date()): Promise<TopicIdea[]> {
+  const date = today.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const msg = [
+    `Schlage ${input.count} abwechslungsreiche Themen für Instagram-Karussells vor. Heute ist ${date}.`,
+    input.audience ? `Zielgruppe: ${audiences[input.audience].label}` : 'Mische die Zielgruppen (Recruiting, Angehörige, Kund:innen, Community).',
+    input.location ? `Standort-Bezug: ${input.location}` : '',
+    input.people.length ? `Für "Kennst du schon …"-Porträts stehen freigestellte Fotos bereit von: ${input.people.join(', ')}. Höchstens ein Porträt-Thema, Fakten zur Person nur als Platzhalter "[vom Team ergänzen]".` : '',
+    input.hint ? `Wunsch der Redaktion: ${input.hint}` : '',
+    'Berücksichtige die Jahreszeit (Wetter, Feiertage, Saison-Themen der Pflege) – aber erfinde keine konkreten Termine, Aktionstage oder Events.',
+    'Mische: Ratgeber (Gesundheitskompass), Leistungen erklären, Recruiting/Benefits, Team & Werte, Entlastung für Angehörige, Mutmacher/Statement.',
+    'Jede Idee muss mit den erlaubten Fakten umsetzbar sein. Keine Zahlen außer aus der Faktenliste.',
+  ].filter(Boolean).join('\n');
+
+  const res = await toolLoop<TopicIdea[]>(SYSTEM, ideasTool, msg, (raw) => {
+    const parsed = z.object({ ideas: z.array(ideaSchema).min(1).max(12) }).safeParse(raw);
+    if (!parsed.success) return { value: null, issues: parsed.error.issues.map((i) => ({ severity: 'error' as const, message: `Schema: ${i.path.join('.')} – ${i.message}` })) };
+    const issues: Issue[] = [];
+    parsed.data.ideas.forEach((idea, k) => {
+      const formal = findFormalAddress(`${idea.title} ${idea.hook}`);
+      if (formal.length) issues.push({ severity: 'error', message: `Idee ${k + 1}: Siezen ("${formal.join('", "')}") – Social Media immer per du.` });
+      const nums = findUnbackedNumbers(`${idea.title} ${idea.hook} ${idea.briefing}`, input.hint ?? '');
+      if (nums.length) issues.push({ severity: 'error', message: `Idee ${k + 1}: Zahl(en) ${nums.join(', ')} nicht belegt.` });
+    });
+    return { value: parsed.data.ideas, issues };
+  });
+  if (!res.value) throw new Error(`Themenvorschläge unbrauchbar:\n${formatIssues(res.issues)}`);
+  return res.value;
+}
 
 /* ---------------------------------------------------- article import */
 

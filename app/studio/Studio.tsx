@@ -12,6 +12,15 @@ import SlideCard from './SlideCard';
 import InstaPreview from './InstaPreview';
 import { downscale, thumbSrc, type LibPhoto } from './util';
 
+interface Idea {
+  title: string;
+  audience: string;
+  hook: string;
+  briefing: string;
+  format: string;
+  photoIdea: string;
+}
+
 export interface Status {
   aiText: boolean;
   aiImages: boolean;
@@ -59,12 +68,15 @@ export default function Studio() {
   const [newTemplate, setNewTemplate] = useState<TemplateId>('text');
   const [hashtagText, setHashtagText] = useState('');
   const [draftTitle, setDraftTitle] = useState('');
+  const [ideas, setIdeas] = useState<Idea[] | null>(null);
+  const [ideasBusy, setIdeasBusy] = useState(false);
 
   /* ------------------------------------------------------------ status */
   useEffect(() => {
     fetch('/api/status').then((r) => r.json()).then((s: Status) => {
       setStatus(s);
-      setAllowAiImages(false);
+      // AI images on by default when configured – the user can still switch them off
+      setAllowAiImages(s.aiImages);
     }).catch(() => setError('Status konnte nicht geladen werden.'));
   }, []);
 
@@ -175,6 +187,33 @@ export default function Studio() {
     const p: LibPhoto = { id: newId(), src: j.url, kind: 'photo', note: `KI: ${prompt}`, ai: true };
     setLibrary((l) => [...l, p]);
     return p;
+  }
+
+  /* ------------------------------------------------------------- ideas */
+  async function loadIdeas() {
+    setIdeasBusy(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audience: audience === 'allgemein' ? undefined : audience, location: location || undefined, count: 6 }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Themenvorschläge fehlgeschlagen');
+      setIdeas(j.ideas);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIdeasBusy(false);
+    }
+  }
+
+  function useIdea(idea: Idea) {
+    setInputMode('briefing');
+    setBriefing(`${idea.title}\n\n${idea.briefing}\n\nHook-Idee: ${idea.hook}\nAufbau: ${idea.format}\nFoto-Idee: ${idea.photoIdea}`);
+    setAudience(idea.audience);
+    setNotice(`Thema übernommen: „${idea.title}“ – jetzt Fotos wählen und „Karussell erstellen“ klicken.`);
   }
 
   /* -------------------------------------------------------- generation */
@@ -387,6 +426,25 @@ export default function Studio() {
         <aside className="sidebar">
           <div className="panel">
             <h2>1. Inhalt</h2>
+            {status?.aiText && (
+              <div style={{ marginBottom: 12 }}>
+                <button className="btn small green" disabled={ideasBusy || !!busy} onClick={loadIdeas}>
+                  {ideasBusy ? 'Themen werden gesucht …' : ideas ? 'Neue Themen vorschlagen' : 'Themen vorschlagen'}
+                </button>
+                {ideas && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                    {ideas.map((idea, k) => (
+                      <div key={k} className="idea">
+                        <b>{idea.title}</b>
+                        <div className="hint">{status.audiences.find((a) => a.id === idea.audience)?.label} · {idea.format}</div>
+                        <div style={{ fontSize: 13, margin: '4px 0' }}>„{idea.hook}“</div>
+                        <button className="btn small" onClick={() => useIdea(idea)}>Übernehmen</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="tabs">
               <button className={`tab ${inputMode === 'briefing' ? 'active' : ''}`} onClick={() => setInputMode('briefing')}>Briefing</button>
               <button className={`tab ${inputMode === 'article' ? 'active' : ''}`} onClick={() => setInputMode('article')}>Artikel umarbeiten</button>
