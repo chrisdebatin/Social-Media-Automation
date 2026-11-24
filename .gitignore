@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+.probe/
+.data/
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env*.local
+.vercel
+.DS_Store
+# Licensed font (Thieme/URW) – not redistributable. Remove this line ONLY in a private repo
+# whose licence covers server-side rendering.
+assets/fonts/NiftyScript.*
