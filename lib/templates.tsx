@@ -102,7 +102,7 @@ const sublineFit = (text: string, maxWidth: number, maxLines = 2) =>
     lineHeight: type.subline.lineHeight,
   });
 
-const accentFit = (text: string, maxWidth: number, maxLines: number, maxSize = type.accent.size, maxHeight?: number) =>
+const accentFit = (text: string, maxWidth: number, maxLines: number, maxSize: number = type.accent.size, maxHeight?: number) =>
   fitText(text, {
     font: 'accent', maxWidth, maxLines, maxSize, minSize: type.accent.min, lineHeight: type.accent.lineHeight, maxHeight,
   });

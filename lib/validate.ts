@@ -22,6 +22,8 @@ export interface ValidateOptions {
   sourceText?: string;
   /** optional: overflow detection (server only – needs fonts) */
   overflow?: (slide: Slide, index: number, total: number) => string[];
+  /** no photos and no AI images available → a statement slide may open the carousel */
+  noPhotos?: boolean;
 }
 
 /* ------------------------------------------------------------- text rules */
@@ -150,7 +152,8 @@ export function validateCarousel(c: Carousel, o: ValidateOptions): Issue[] {
   const structure: Issue['severity'] = o.mode === 'ai' ? 'error' : 'warning';
   if (n < 1 || n > 10) issues.push({ severity: 'error', message: `Ein Karussell hat 1–10 Slides (aktuell ${n}).` });
   if (n > 1) {
-    if (!['cover', 'photo'].includes(c.slides[0].template)) issues.push({ severity: structure, slide: 0, message: 'Slide 1 sollte "cover" oder "photo" sein.' });
+    const openers = o.noPhotos ? ['cover', 'photo', 'statement'] : ['cover', 'photo'];
+    if (!openers.includes(c.slides[0].template)) issues.push({ severity: structure, slide: 0, message: `Slide 1 sollte ${openers.map((t) => `"${t}"`).join(' oder ')} sein.` });
     if (c.slides[n - 1].template !== 'cta') issues.push({ severity: structure, slide: n - 1, message: 'Letzte Slide sollte "cta" sein.' });
   }
   c.slides.forEach((s, i) => issues.push(...validateSlide(s, i, n, o)));
