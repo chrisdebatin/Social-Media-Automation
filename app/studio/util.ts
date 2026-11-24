@@ -16,9 +16,9 @@ export function thumbSrc(src: string): string {
  * Client-side downscale before upload (Vercel request limit 4.5 MB).
  * PNG keeps transparency (cutouts), everything else becomes JPEG.
  */
-export async function downscale(file: File, max = 2000): Promise<File> {
+export async function downscale(file: File, max = 2000, opts: { forceJpeg?: boolean; maxBytes?: number } = {}): Promise<File> {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const png = file.type === 'image/png';
+  const png = file.type === 'image/png' && !opts.forceJpeg;
   let scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
   for (let attempt = 0; attempt < 4; attempt++) {
     const w = Math.round(bitmap.width * scale);
@@ -30,7 +30,7 @@ export async function downscale(file: File, max = 2000): Promise<File> {
     const blob = await new Promise<Blob>((res, rej) =>
       canvas.toBlob((b) => (b ? res(b) : rej(new Error('Bild konnte nicht verarbeitet werden'))), png ? 'image/png' : 'image/jpeg', 0.88),
     );
-    if (blob.size < 3.8 * 1024 * 1024) {
+    if (blob.size < (opts.maxBytes ?? 3.8 * 1024 * 1024)) {
       return new File([blob], file.name.replace(/\.[^.]+$/, png ? '.png' : '.jpg'), { type: blob.type });
     }
     scale *= 0.75;

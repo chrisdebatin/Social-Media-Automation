@@ -95,6 +95,19 @@ Die Antwort enthält den neuen Token. Ihn in Vercel als `IG_ACCESS_TOKEN` eintra
 Slides mit KI-Bildern werden mit `is_ai_generated=true` veröffentlicht. Lehnt die API-Version den Parameter ab,
 postet die App ohne und zeigt einen Hinweis – dann im Beitrag in der Instagram-App „KI-Info" aktivieren.
 
+## Einreichungen aus dem Team
+
+Mitarbeitende reichen über einen **Link ohne Passwort** Fotos und ein paar Sätze ein:
+`https://<app>/einreichen?k=<SUBMIT_KEY>` – z. B. in Team-WhatsApp-Gruppen teilen oder als QR-Code an den Standorten
+aushängen. Der Link steht im Studio unter **Einreichungen** zum Kopieren bereit.
+
+- 1–3 Fotos, Text (max. 600 Zeichen), optional Vorname (für „📸 Name, Team Standort" in der Caption), Standort.
+- Zwei Pflicht-Häkchen: Einwilligung aller erkennbaren Personen; keine Gesundheitsdaten/Dokumente/Adressen im Bild.
+- Fotos werden neu kodiert (EXIF/GPS entfernt). **Nichts wird automatisch veröffentlicht**: Einreichungen landen in
+  der Prüf-Warteschlange; **Übernehmen** legt die Fotos in die Bibliothek und füllt das Briefing aus.
+- **Löschen** entfernt Einreichung und Fotos endgültig (Datensparsamkeit) – abgelehnte Einreichungen bitte löschen.
+- Link sperren/erneuern: `SUBMIT_KEY` in Vercel ändern und neu deployen.
+
 ## Schriften & Lizenzen
 
 - **Nunito Sans** (OFL) – liegt als `.woff` in `assets/fonts/` (aus `@fontsource/nunito-sans`).

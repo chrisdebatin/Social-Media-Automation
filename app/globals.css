@@ -106,3 +106,11 @@ textarea { resize: vertical; min-height: 60px; }
 
 .idea { border: 2px solid var(--grau15); border-radius: 10px; padding: 10px; background: var(--weiss); }
 .idea:hover { border-color: var(--apfelgruen); }
+
+/* ---------- submission page (mobile first) */
+.submit-page { max-width: 520px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.submit-logo { width: 220px; height: auto; margin: 8px 0 0; }
+.submit-page p { margin: 6px 0 12px; }
+.thumb.add { display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--waldgruen); border: 2px dashed var(--apfelgruen); }
+.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 14px; margin: 10px 0; }
+.check input { margin-top: 3px; width: 20px; height: 20px; flex: none; accent-color: var(--waldgruen); }

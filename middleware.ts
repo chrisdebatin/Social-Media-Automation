@@ -5,7 +5,11 @@ import { NextResponse, type NextRequest } from 'next/server';
  * - APP_PASSWORD set → required (any user name).
  * - APP_PASSWORD missing → allowed only in local development; on Vercel/production the app refuses to serve.
  */
+/** Paths reachable without basic auth: the employee submission link (checks SUBMIT_KEY itself) and brand logos. */
+const PUBLIC = [/^\/einreichen\/?$/, /^\/api\/submit\/?$/, /^\/api\/asset\/brand\/[a-z0-9._-]+\.png$/i];
+
 export function middleware(req: NextRequest) {
+  if (PUBLIC.some((r) => r.test(req.nextUrl.pathname))) return NextResponse.next();
   const password = process.env.APP_PASSWORD;
   const deployed = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
   if (!password) {

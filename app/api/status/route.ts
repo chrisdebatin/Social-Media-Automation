@@ -6,6 +6,7 @@ import { instagramEnabled } from '@/lib/instagram';
 import { draftsEnabled, storageMode } from '@/lib/storage';
 import { audiences } from '@/lib/brand';
 import { allLocations } from '@/lib/facts';
+import { submitEnabled, submitKey } from '@/lib/submitKey';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,5 +23,7 @@ export async function GET() {
     people: listPeople(),
     audiences: Object.entries(audiences).map(([id, a]) => ({ id, label: a.label })),
     locations: allLocations,
+    // the studio itself is behind basic auth, so it may show the share link
+    submitKey: submitEnabled() ? submitKey() : null,
   });
 }

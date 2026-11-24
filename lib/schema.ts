@@ -150,3 +150,17 @@ export function fullCaption(c: Pick<Carousel, 'caption' | 'hashtags'>): string {
 export function missingPhoto(s: Slide): boolean {
   return templateCatalog[s.template].photo !== 'none' && !s.photo?.src;
 }
+
+/* ------------------------------------------------------------ submissions */
+
+export const submissionSchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  name: z.string().max(60).optional(),
+  location: z.string().max(80).optional(),
+  text: z.string().min(1).max(600),
+  photos: z.array(z.object({ src: z.string(), width: z.number(), height: z.number() })).min(1).max(3),
+  consent: z.literal(true),
+  status: z.enum(['neu', 'in_arbeit', 'erledigt']),
+});
+export type Submission = z.infer<typeof submissionSchema>;

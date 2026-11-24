@@ -32,6 +32,17 @@ export interface Status {
   people: { id: string; name: string; src: string }[];
   audiences: { id: string; label: string }[];
   locations: string[];
+  submitKey: string | null;
+}
+
+interface Submission {
+  id: string;
+  createdAt: string;
+  name?: string;
+  location?: string;
+  text: string;
+  photos: { src: string; width: number; height: number }[];
+  status: 'neu' | 'in_arbeit' | 'erledigt';
 }
 
 type Busy = null | string;
@@ -69,6 +80,8 @@ export default function Studio() {
   const [hashtagText, setHashtagText] = useState('');
   const [draftTitle, setDraftTitle] = useState('');
   const [ideas, setIdeas] = useState<Idea[] | null>(null);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [showSubs, setShowSubs] = useState(false);
   const [ideasBusy, setIdeasBusy] = useState(false);
 
   /* ------------------------------------------------------------ status */
@@ -79,6 +92,31 @@ export default function Studio() {
       setAllowAiImages(s.aiImages);
     }).catch(() => setError('Status konnte nicht geladen werden.'));
   }, []);
+
+  const loadSubmissions = useCallback(() => {
+    fetch('/api/submissions').then((r) => r.json()).then((j) => setSubmissions(j.submissions ?? [])).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (status?.storage && status.storage !== 'none') loadSubmissions();
+  }, [status?.storage, loadSubmissions]);
+
+  async function useSubmission(sub: Submission) {
+    const added: LibPhoto[] = sub.photos.map((p, i) => ({
+      id: newId(), src: p.src, kind: 'photo' as const,
+      note: `Eingereicht${sub.name ? ` von ${sub.name}` : ''}${sub.location ? ` (${sub.location})` : ''}${i === 0 ? ` – ${sub.text.slice(0, 80)}` : ''}`,
+    }));
+    setLibrary((l) => [...l, ...added]);
+    setInputMode('briefing');
+    setBriefing(
+      `Beitrag aus dem Team${sub.location ? ` in ${sub.location}` : ''}:\n${sub.text}\n\n` +
+      `Nutze die eingereichten Fotos. ${sub.name ? `Nenne in der Caption: „📸 ${sub.name}${sub.location ? `, Team ${sub.location}` : ''}“.` : sub.location ? `Nenne in der Caption: „📸 Team ${sub.location}“.` : ''}`,
+    );
+    if (sub.location) setLocation(sub.location);
+    setShowSubs(false);
+    await fetch(`/api/submissions/${sub.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'in_arbeit' }) });
+    loadSubmissions();
+    setNotice('Einreichung übernommen – Fotos sind links in der Bibliothek, Briefing ist ausgefüllt. Jetzt „Karussell erstellen“.');
+  }
 
   // ?draft=<id> → load shared draft (review by a colleague)
   useEffect(() => {
@@ -406,6 +444,11 @@ export default function Studio() {
       <header className="header">
         <img src="/api/asset/brand/logo-hauptversion.png" alt="Pflegeunion" />
         <h1>Social Studio</h1>
+        {status && status.storage !== 'none' && (
+          <button className="btn small green" onClick={() => { loadSubmissions(); setShowSubs(true); }}>
+            Einreichungen{submissions.filter((x) => x.status === 'neu').length ? ` (${submissions.filter((x) => x.status === 'neu').length} neu)` : ''}
+          </button>
+        )}
         {status && (
           <div className="chips">
             <span className={`chip ${status.aiText ? 'on' : ''}`} title={status.model}>KI-Text {status.aiText ? '✓' : '–'}</span>
@@ -651,6 +694,15 @@ export default function Studio() {
         </main>
       </div>
 
+      {showSubs && (
+        <SubmissionsDialog
+          submissions={submissions}
+          submitKey={status?.submitKey ?? null}
+          onClose={() => setShowSubs(false)}
+          onUse={useSubmission}
+          onChanged={loadSubmissions}
+        />
+      )}
       {showDrafts && <DraftsDialog onClose={() => setShowDrafts(false)} onLoad={loadDraft} />}
       {showPublish && carousel && (
         <PublishDialog carousel={carousel} onClose={() => setShowPublish(false)} />
@@ -752,6 +804,68 @@ function PublishDialog({ carousel, onClose }: { carousel: Carousel; onClose: () 
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SubmissionsDialog({ submissions, submitKey, onClose, onUse, onChanged }: {
+  submissions: Submission[];
+  submitKey: string | null;
+  onClose: () => void;
+  onUse: (s: Submission) => void;
+  onChanged: () => void;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const link = submitKey ? `${window.location.origin}/einreichen?k=${encodeURIComponent(submitKey)}` : null;
+  const label = { neu: 'Neu', in_arbeit: 'In Arbeit', erledigt: 'Erledigt' } as const;
+
+  async function setStatus(id: string, status: Submission['status']) {
+    await fetch(`/api/submissions/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+    onChanged();
+  }
+  async function remove(id: string) {
+    await fetch(`/api/submissions/${id}`, { method: 'DELETE' });
+    setConfirmDelete(null);
+    onChanged();
+  }
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
+        <h2>Einreichungen aus dem Team</h2>
+        {link ? (
+          <div className="banner info" style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>Link für Mitarbeitende (ohne Passwort, z. B. in Team-WhatsApp-Gruppen teilen):</div>
+            <div className="row">
+              <input type="text" readOnly value={link} className="grow" style={{ width: 'auto', fontSize: 12 }} />
+              <button className="btn small green" onClick={async () => { await navigator.clipboard.writeText(link); setCopied(true); }}>{copied ? 'Kopiert ✓' : 'Kopieren'}</button>
+            </div>
+          </div>
+        ) : (
+          <div className="banner error" style={{ marginBottom: 12 }}>Einreich-Link ist aus: in Vercel SUBMIT_KEY (mind. 12 Zeichen) setzen und neu deployen.</div>
+        )}
+        {submissions.length === 0 ? <p>Noch keine Einreichungen.</p> : submissions.map((s) => (
+          <div key={s.id} className="draft-row" style={{ alignItems: 'flex-start' }}>
+            <div className="row" style={{ gap: 4, flex: 'none' }}>
+              {s.photos.map((p) => <a key={p.src} href={p.src} target="_blank" rel="noreferrer"><img src={p.src} alt="" style={{ width: 56, height: 70, objectFit: 'cover', borderRadius: 6 }} /></a>)}
+            </div>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <b>{s.name || 'Ohne Namen'}</b>{s.location ? ` · ${s.location}` : ''} <span className="chip" style={{ marginLeft: 4 }}>{label[s.status]}</span>
+              <div className="hint">{new Date(s.createdAt).toLocaleString('de-DE')}</div>
+              <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{s.text}</div>
+              <div className="row" style={{ marginTop: 6 }}>
+                <button className="btn small primary" onClick={() => onUse(s)}>Übernehmen</button>
+                {s.status !== 'erledigt' && <button className="btn small" onClick={() => setStatus(s.id, 'erledigt')}>Erledigt</button>}
+                {confirmDelete === s.id
+                  ? <button className="btn small danger" onClick={() => remove(s.id)}>Endgültig löschen (inkl. Fotos)</button>
+                  : <button className="btn small danger" onClick={() => setConfirmDelete(s.id)}>Löschen</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div className="row" style={{ marginTop: 14 }}><button className="btn" onClick={onClose}>Schließen</button></div>
       </div>
     </div>
   );

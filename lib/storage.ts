@@ -5,7 +5,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { put, list, del } from '@vercel/blob';
-import { draftSchema, type Draft } from './schema';
+import { draftSchema, submissionSchema, type Draft, type Submission } from './schema';
 
 export const blobEnabled = () => !!process.env.BLOB_READ_WRITE_TOKEN;
 /** Local file drafts work only where the filesystem persists (not on Vercel). */
@@ -96,4 +96,63 @@ export async function deleteDraft(id: string): Promise<void> {
     return;
   }
   await fs.rm(path.join(DRAFT_DIR, `${id}.json`), { force: true });
+}
+
+/* ------------------------------------------------------------ submissions */
+
+const SUB_DIR = path.join(process.cwd(), '.data', 'submissions');
+const SUB_PREFIX = 'submissions/';
+
+export async function saveSubmission(sub: Submission): Promise<void> {
+  if (!validId(sub.id)) throw new Error('Ungültige ID');
+  const json = JSON.stringify(submissionSchema.parse(sub));
+  if (blobEnabled()) {
+    await put(`${SUB_PREFIX}${sub.id}.json`, json, {
+      access: 'public', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: true, cacheControlMaxAge: 60,
+    });
+    return;
+  }
+  if (!localDraftsEnabled()) throw new Error('Einreichungen brauchen Vercel Blob.');
+  await fs.mkdir(SUB_DIR, { recursive: true });
+  await fs.writeFile(path.join(SUB_DIR, `${sub.id}.json`), json);
+}
+
+export async function loadSubmission(id: string): Promise<Submission | null> {
+  if (!validId(id)) return null;
+  if (blobEnabled()) {
+    const { blobs } = await list({ prefix: `${SUB_PREFIX}${id}.json` });
+    if (!blobs[0]) return null;
+    const res = await fetch(`${blobs[0].url}?v=${Date.now()}`, { cache: 'no-store' });
+    return res.ok ? submissionSchema.parse(await res.json()) : null;
+  }
+  try {
+    return submissionSchema.parse(JSON.parse(await fs.readFile(path.join(SUB_DIR, `${id}.json`), 'utf8')));
+  } catch {
+    return null;
+  }
+}
+
+export async function listSubmissions(): Promise<Submission[]> {
+  let ids: string[] = [];
+  if (blobEnabled()) {
+    const { blobs } = await list({ prefix: SUB_PREFIX, limit: 200 });
+    ids = blobs.map((b) => b.pathname.slice(SUB_PREFIX.length).replace(/\.json$/, ''));
+  } else if (localDraftsEnabled()) {
+    ids = (await fs.readdir(SUB_DIR).catch(() => [] as string[])).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''));
+  }
+  const subs = await Promise.all(ids.map((id) => loadSubmission(id).catch(() => null)));
+  return subs.filter((s): s is Submission => !!s).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Deletes the submission and its photos (data minimisation). */
+export async function deleteSubmission(id: string): Promise<void> {
+  const sub = await loadSubmission(id);
+  if (!sub) return;
+  if (blobEnabled()) {
+    const { blobs } = await list({ prefix: `${SUB_PREFIX}${id}.json` });
+    const urls = [...blobs.map((b) => b.url), ...sub.photos.map((p) => p.src).filter((u) => u.startsWith('https://'))];
+    if (urls.length) await del(urls);
+    return;
+  }
+  await fs.rm(path.join(SUB_DIR, `${id}.json`), { force: true });
 }
