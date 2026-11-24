@@ -6,7 +6,7 @@
 import { requiredHashtag } from './brand';
 import { allowedNumbers } from './facts';
 import {
-  CAPTION_MAX, HASHTAG_MAX, charCount, fullCaption, templateCatalog, type Carousel, type Slide, type TextSlot,
+  CAPTION_MAX, HASHTAG_MAX, charCount, fullCaption, missingPhoto, templateCatalog, type Carousel, type Slide, type TextSlot,
 } from './schema';
 
 export interface Issue {
@@ -114,6 +114,10 @@ export function validateSlide(s: Slide, i: number, total: number, o: ValidateOpt
     });
   } else if (s.bullets?.some((x) => x.trim())) {
     push(o.mode === 'ai' ? 'error' : 'warning', `Template "${spec.id}" hat keine Aufzählung.`, 'bullets');
+  }
+
+  if (o.mode === 'manual' && missingPhoto(s)) {
+    push('error', s.imagePrompt ? 'Foto fehlt – KI-Bild generieren oder Foto hochladen.' : 'Foto fehlt.', 'photo');
   }
 
   const style = s.headlineStyle ?? spec.defaultHeadlineStyle;
