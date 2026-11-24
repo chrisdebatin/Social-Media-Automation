@@ -30,7 +30,7 @@ beforeEach(() => {
   calls = [];
   rejectAiParam = false;
   vi.stubEnv('IG_USER_ID', '123');
-  vi.stubEnv('IG_ACCESS_TOKEN', 'TOKEN');
+  vi.stubEnv('IG_ACCESS_TOKEN', 'IGAATOKEN');
   vi.stubEnv('IG_API_VERSION', 'v24.0');
   vi.stubGlobal('fetch', mockGraph());
 });
@@ -75,6 +75,13 @@ describe('Instagram publishing', () => {
     expect(await publishingQuota()).toEqual({ used: 3, total: 100, remaining: 97 });
     await expect(publish([{ url: 'data:image/jpeg;base64,AA', ai: false }], 'x')).rejects.toThrow('https');
     await expect(publish(imgs(11), 'x')).rejects.toThrow('1–10');
+  });
+
+  it('uses graph.facebook.com for system-user tokens and skips refresh', async () => {
+    vi.stubEnv('IG_ACCESS_TOKEN', 'EAATOKEN');
+    await publish(imgs(1), 'x');
+    expect(calls.every((c) => c.url.startsWith('https://graph.facebook.com/v24.0/'))).toBe(true);
+    await expect(refreshToken()).rejects.toThrow('läuft nicht ab');
   });
 
   it('refreshes the token', async () => {

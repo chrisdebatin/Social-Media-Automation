@@ -5,9 +5,22 @@
  */
 
 const version = () => process.env.IG_API_VERSION || 'v24.0';
-const base = () => `https://graph.instagram.com/${version()}`;
 const userId = () => process.env.IG_USER_ID || '';
 const token = () => process.env.IG_ACCESS_TOKEN || '';
+
+/**
+ * Two token types exist:
+ *  - Instagram Login tokens ("IG…")            → graph.instagram.com, expire after 60 days
+ *  - Unified Login / system-user tokens ("EAA…") → graph.facebook.com, never expire
+ * IG_API_HOST overrides the auto-detection.
+ */
+export function apiHost(): string {
+  const override = process.env.IG_API_HOST?.trim();
+  if (override) return override.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return token().startsWith('IG') ? 'graph.instagram.com' : 'graph.facebook.com';
+}
+export const tokenExpires = () => apiHost() === 'graph.instagram.com';
+const base = () => `https://${apiHost()}/${version()}`;
 
 export const instagramEnabled = () => !!userId() && !!token();
 
@@ -132,6 +145,7 @@ export async function publish(images: { url: string; ai: boolean }[], caption: s
 /** Long-lived tokens last 60 days; refresh at least 24 h after issue and before expiry. */
 export async function refreshToken(): Promise<{ accessToken: string; expiresInDays: number }> {
   if (!token()) throw new InstagramError('IG_ACCESS_TOKEN fehlt.');
+  if (!tokenExpires()) throw new InstagramError('Dieser Token (System-User / Unified Login) läuft nicht ab – kein Refresh nötig.');
   const url = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token())}`;
   const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
   const json = (await res.json()) as { access_token?: string; expires_in?: number; error?: { message?: string } };

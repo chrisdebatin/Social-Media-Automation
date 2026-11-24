@@ -70,7 +70,16 @@ Meta ändert die Oberflächen regelmäßig – die Schritte beschreiben den Stan
 8. In der App erscheint der Chip **Instagram ✓**. Vor jedem Post wird das Kontingent geprüft
    (`content_publishing_limit`, 24 h rollierend) und im Bestätigungsdialog angezeigt.
 
-### Token erneuern (alle 60 Tage)
+### Neue Meta-Apps: Unified Login
+
+Seit Ende 2026 bietet Meta neuen Apps kein „API-Setup mit Instagram-Login" mehr an, sondern **Unified Login**
+(Konfiguration „Instagram API (unified login)", System-User-Token, läuft nicht ab). Die App erkennt den Token-Typ
+automatisch: Tokens mit `IG…` laufen über `graph.instagram.com`, Tokens mit `EAA…` über `graph.facebook.com`
+(überschreibbar mit `IG_API_HOST`). Für System-User-Tokens entfällt der 60-Tage-Refresh.
+
+Die Social-Studio-App in Meta heißt **Pflegeunion Social Studio** (Business-Portfolio Pflegeunion).
+
+### Token erneuern (alle 60 Tage, nur `IG…`-Tokens)
 
 Der Token muss mindestens 24 h alt und noch gültig sein. Am besten einen Kalendertermin alle ~50 Tage anlegen:
 
