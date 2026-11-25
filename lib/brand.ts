@@ -60,7 +60,7 @@ export type HeadlineStyle = (typeof headlineStyles)[number];
 export const logo = {
   files: {
     hauptversion: 'brand/logo-hauptversion.png', // auf Weiß
-    alternative: 'brand/logo-alternative.png', // auf Apfelgrün / Waldgrün / Grau
+    alternative: 'brand/logo-alternative.png', // NUR auf Waldgrün (Marketing: nie weiß auf Apfelgrün)
     kreisHaupt: 'brand/kreislogo-hauptversion.png', // Waldgrüner Außenring
     kreisAlt: 'brand/kreislogo-alternative.png', // Apfelgrüner Außenring
   },

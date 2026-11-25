@@ -200,10 +200,20 @@ const topWave = (seed: string): WaveOptions => ({
   width: W, height: H, yLeft: 196, yRight: 160, amplitude: 18, seed, fill: 'above',
 });
 
+/**
+ * The white logo (Alternativversion) is only ever placed on Waldgrün – never on Apfelgrün
+ * (too little contrast). Slides with an Apfelgrün wave at the bottom get this Waldgrün band underneath.
+ */
+const logoBand = (seed: string): WaveOptions => ({
+  width: W, height: H, yLeft: 1138, yRight: 1112, amplitude: 10, seed, fill: 'below',
+});
+/** The band must cover the logo incl. protection zone X. */
+const LOGO_BAND_TOP = (seed: string) => waveTop(logoBand(seed));
+
 /* ============================================================== templates */
 
 /* ----------------------------------------------------------------- cover */
-interface CoverG { wave: WaveOptions; photo: { x: number; y: number; w: number; h: number } }
+interface CoverG { wave: WaveOptions; band: WaveOptions; photo: { x: number; y: number; w: number; h: number } }
 const cover = define<CoverG>({
   layout(s) {
     const top = 96;
@@ -215,14 +225,14 @@ const cover = define<CoverG>({
       texts.push(box('subline', sub, P, bottom + 24, TW, sub.lineHeightPx * 2, colors.schwarz));
       bottom += 24 + sub.height;
     }
-    // photo adapts to the text height
-    // photo adapts to the text height; it dips only slightly behind the wave
-    const photoBottom = 1190;
+    // photo adapts to the text height; it dips only slightly behind the waves
+    const photoBottom = 1150;
     const ph = Math.max(470, Math.min(820, photoBottom - (bottom + 40)));
     const pw = Math.max(720, Math.min(900, ph * 1.12));
     const photo = { x: W - pw + 70, y: photoBottom - ph, w: pw, h: ph };
-    const wave: WaveOptions = { width: W, height: H, yLeft: 1118, yRight: 1076, amplitude: 22, seed: `${s.id}-w`, fill: 'below' };
-    return { texts, g: { wave, photo } };
+    // Apfelgrün wave on top, Waldgrün logo band underneath (double wave)
+    const wave: WaveOptions = { width: W, height: H, yLeft: 1068, yRight: 1030, amplitude: 20, seed: `${s.id}-w`, fill: 'below' };
+    return { texts, g: { wave, band: logoBand(`${s.id}-band`), photo } };
   },
   render(s, L, a) {
     const { photo, wave } = L.g;
@@ -231,6 +241,7 @@ const cover = define<CoverG>({
         <Blob x={photo.x - 70} y={photo.y + 40} w={photo.w} h={photo.h} seed={`${s.id}-g`} fill={colors.grau15} />
         <PhotoBlob src={a.photo?.src ?? null} {...photo} seed={`${s.id}-p`} />
         <Wave o={wave} fill={colors.apfelgruen} />
+        <Wave o={L.g.band} fill={colors.waldgruen} />
         <Logo src={a.logoAlt} />
         {L.texts.map((b) => <Lines key={b.slot} b={b} />)}
       </Frame>
@@ -239,20 +250,21 @@ const cover = define<CoverG>({
 });
 
 /* ----------------------------------------------------------------- photo */
-interface PhotoG { wave: WaveOptions }
+interface PhotoG { wave: WaveOptions; band: WaveOptions }
 const photo = define<PhotoG>({
   layout(s) {
     const hl = headlineFit(s.headline ?? '', s.headlineStyle, { maxWidth: TW, maxLines: 3, maxSize: 96, maxHeight: 340 });
     const sub = has(s.subline) ? sublineFit(s.subline!, TW, 2) : null;
     const textH = hl.height + (sub ? 20 + sub.height : 0);
-    const textBottom = LOGO_TOP - 2 * logoX;
+    // text sits on the Apfelgrün wave, above the Waldgrün logo band
+    const textBottom = LOGO_BAND_TOP(`${s.id}-band`) - 28;
     const textTop = textBottom - textH;
     const texts = [box('headline', hl, P, textTop, TW, 340, colors.waldgruen)];
     if (sub) texts.push(box('subline', sub, P, textTop + hl.height + 20, TW, sub.lineHeightPx * 2, colors.schwarz));
     const amp = 20;
     const base = textTop - 36 - amp;
     const wave: WaveOptions = { width: W, height: H, yLeft: base, yRight: base - 24, amplitude: amp, seed: `${s.id}-w`, fill: 'below' };
-    return { texts, g: { wave } };
+    return { texts, g: { wave, band: logoBand(`${s.id}-band`) } };
   },
   render(s, L, a) {
     return (
@@ -263,6 +275,7 @@ const photo = define<PhotoG>({
           <div style={{ position: 'absolute', left: P, top: 300, fontSize: 48, fontWeight: 700, color: colors.grau60 }}>Foto fehlt</div>
         )}
         <Wave o={L.g.wave} fill={colors.apfelgruen} />
+        <Wave o={L.g.band} fill={colors.waldgruen} />
         <Logo src={a.logoAlt} />
         {L.texts.map((b) => <Lines key={b.slot} b={b} />)}
       </Frame>
@@ -548,6 +561,10 @@ const cta = define<CtaG>({
 /* ============================================================== registry */
 
 const templates: Record<TemplateId, TemplateDef<unknown>> = { cover, photo, text, statement, quote, team, list, cta };
+
+/** exported for tests: the logo band must clear the logo + protection zone */
+export const logoBandBottom = (seed: string) => waveBottom(logoBand(seed));
+export const LOGO_TOP_Y = LOGO_TOP;
 
 export function layoutSlide(s: Slide, ctx: LayoutCtx): Layout {
   return templates[s.template].layout(s, ctx);

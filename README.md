@@ -160,8 +160,10 @@ Wo das Brand Book nichts vorgibt, wurde die ruhigere, einfachere Variante gewäh
 - **Größen:** Copy 36 px (1080er-Canvas), Subline ≈ 1,2× Copy, Headline 72–144 px (2–4× Copy), automatisch die
   größte Größe, die passt. Zeilenabstand Headline 1,1, Copy 1,2 (wie Brand-Book-Beispiel 11/13,2). Keine Laufweite.
 - **Logo:** 440 px breit, Schutzzone X = Höhe des „N" (≈ 31 px, aus dem PNG gemessen), Randabstand 2 X. Der Textrand
-  entspricht ebenfalls 2 X – Logo und Text stehen auf einer linken Achse. Weißes Logo (Alternativversion) nur auf
-  Apfelgrün/Waldgrün-Wellen, nie auf Fotos; auf weißen Inhalts-Slides die kompakte Kreis-Bildmarke unten links.
+  entspricht ebenfalls 2 X – Logo und Text stehen auf einer linken Achse. Weißes Logo (Alternativversion) **nur auf Waldgrün** –
+  nie auf Apfelgrün (zu wenig Kontrast, Vorgabe Marketing) und nie auf Fotos. Slides mit apfelgrüner Welle unten
+  (Cover, Vollbild-Foto) bekommen darunter ein waldgrünes Logo-Band (Doppelwelle); ein Test prüft die Pixel rund um
+  das Logo. auf weißen Inhalts-Slides die kompakte Kreis-Bildmarke unten links.
 - **Wellen & Kleckse:** 4 Ankerpunkte pro Welle, abwechselnd auf/ab, leichte Steigung → eine ruhige Bewegung, nie
   Zickzack. Kleckse mit 6 Ankerpunkten und max. 10 % Unregelmäßigkeit. Formen sind pro Slide-ID stabil.
 - **Cover:** Foto taucht nur leicht hinter die apfelgrüne Welle, damit möglichst viel Bild sichtbar bleibt.
