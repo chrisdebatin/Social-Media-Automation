@@ -83,6 +83,9 @@ export default function Studio() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [showSubs, setShowSubs] = useState(false);
   const [ideasBusy, setIdeasBusy] = useState(false);
+  const [ideaState, setIdeaState] = useState<Record<string, 'working' | 'open' | 'draft' | 'failed'>>({});
+  const [batchRunning, setBatchRunning] = useState(false);
+  const cancelBatch = useRef(false);
 
   /* ------------------------------------------------------------ status */
   useEffect(() => {
@@ -218,12 +221,12 @@ export default function Studio() {
     return added;
   }
 
-  async function generateAiImage(prompt: string): Promise<LibPhoto> {
+  async function generateAiImage(prompt: string, addToLibrary = true): Promise<LibPhoto> {
     const r = await fetch('/api/image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'KI-Bild fehlgeschlagen');
     const p: LibPhoto = { id: newId(), src: j.url, kind: 'photo', note: `KI: ${prompt}`, ai: true };
-    setLibrary((l) => [...l, p]);
+    if (addToLibrary) setLibrary((l) => [...l, p]);
     return p;
   }
 
@@ -240,6 +243,7 @@ export default function Studio() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Themenvorschläge fehlgeschlagen');
       setIdeas(j.ideas);
+      setIdeaState({});
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -247,70 +251,169 @@ export default function Studio() {
     }
   }
 
-  function useIdea(idea: Idea) {
+  const ideaBriefing = (idea: Idea) =>
+    `${idea.title}\n\n${idea.briefing}\n\nHook-Idee: ${idea.hook}\nAufbau: ${idea.format}\nFoto-Idee: ${idea.photoIdea}`;
+
+  function useIdea(idea: Idea, announce = true) {
     setInputMode('briefing');
-    setBriefing(`${idea.title}\n\n${idea.briefing}\n\nHook-Idee: ${idea.hook}\nAufbau: ${idea.format}\nFoto-Idee: ${idea.photoIdea}`);
+    setBriefing(ideaBriefing(idea));
     setAudience(idea.audience);
-    setNotice(`Thema übernommen: „${idea.title}“ – jetzt Fotos wählen und „Karussell erstellen“ klicken.`);
+    if (announce) setNotice(`Thema übernommen: „${idea.title}“ – jetzt Fotos wählen und „Karussell erstellen“ klicken.`);
   }
 
   /* -------------------------------------------------------- generation */
+  interface BuildInput {
+    briefing: string;
+    audience: string;
+    articleUrl?: string;
+    articleText?: string;
+    pool: { src: string; ai?: boolean; info: { kind: 'photo' | 'cutout'; name?: string; note?: string } }[];
+  }
+  interface BuildResult { carousel: Carousel; ok: boolean; attempts: number; issues: Issue[]; imageErrors: string[] }
+
+  /** Text via Claude, then missing photos via AI images. Pure – touches only the busy banner. */
+  async function buildPost(input: BuildInput, label = '', addToLibrary = true): Promise<BuildResult> {
+    if (!status) throw new Error('Status nicht geladen');
+    const useAiImages = allowAiImages && status.aiImages;
+    setBusy(`${label}KI schreibt das Karussell … (bis zu 1 Minute)`);
+    const r = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'carousel',
+        briefing: input.briefing,
+        articleUrl: input.articleUrl,
+        articleText: input.articleText,
+        audience: input.audience,
+        location: location || undefined,
+        slideCount,
+        photos: input.pool.map((p) => p.info),
+        photoSrcs: input.pool.map((p) => p.src),
+        allowAiImages: useAiImages,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Generierung fehlgeschlagen');
+    const c = j.carousel as Carousel;
+    c.slides = c.slides.map((s) => (s.photo ? { ...s, photo: { ...s.photo, ai: input.pool.find((p) => p.src === s.photo!.src)?.ai } } : s));
+
+    const imageErrors: string[] = [];
+    const missing = c.slides.filter((s) => s.imagePrompt && !s.photo?.src);
+    if (useAiImages && missing.length) {
+      for (const [k, s] of missing.entries()) {
+        setBusy(`${label}KI-Bild ${k + 1}/${missing.length} wird erstellt …`);
+        try {
+          const p = await generateAiImage(s.imagePrompt!, addToLibrary);
+          c.slides = c.slides.map((x) => (x.id === s.id ? { ...x, photo: { src: p.src, ai: true } } : x));
+        } catch (e) {
+          imageErrors.push(`KI-Bild für „${s.headline ?? ''}“: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    }
+    return { carousel: c, ok: j.ok, attempts: j.attempts, issues: j.issues as Issue[], imageErrors };
+  }
+
+  function showResult(res: BuildResult, extra = '') {
+    setCarousel(res.carousel);
+    setOverflow({});
+    setDraft(null);
+    setDraftTitle('');
+    window.history.replaceState(null, '', '/');
+    setAiIssues(res.ok ? [] : res.issues.filter((i) => i.severity === 'error'));
+    if (res.imageErrors.length) setError(res.imageErrors.join(' · '));
+    setNotice(res.ok ? `${extra}Fertig nach ${res.attempts} Versuch${res.attempts > 1 ? 'en' : ''} – bitte prüfen und anpassen.` : null);
+  }
+
+  function currentPool(): BuildInput['pool'] {
+    const people = status?.people.filter((p) => selectedPeople.includes(p.id)) ?? [];
+    return [
+      ...library.map((p) => ({ src: p.src, ai: p.ai, info: { kind: p.kind, note: p.note || undefined } })),
+      ...people.map((p) => ({ src: p.src, info: { kind: 'cutout' as const, name: p.name, note: `Team-Porträt von ${p.name}` } })),
+    ];
+  }
+
   async function generate() {
     if (!status) return;
-    setBusy('KI schreibt das Karussell … (bis zu 1 Minute)');
     setError(null);
     setNotice(null);
     setAiIssues([]);
-    const people = status.people.filter((p) => selectedPeople.includes(p.id));
-    const pool = [
-      ...library.map((p) => ({ src: p.src, info: { kind: p.kind, note: p.note || undefined } })),
-      ...people.map((p) => ({ src: p.src, info: { kind: 'cutout' as const, name: p.name, note: `Team-Porträt von ${p.name}` } })),
-    ];
     try {
-      const r = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'carousel',
-          briefing,
-          articleUrl: inputMode === 'article' && articleUrl.trim() ? articleUrl.trim() : undefined,
-          articleText: inputMode === 'article' && !articleUrl.trim() && articleText.trim() ? articleText.trim() : undefined,
-          audience,
-          location: location || undefined,
-          slideCount,
-          photos: pool.map((p) => p.info),
-          photoSrcs: pool.map((p) => p.src),
-          allowAiImages: allowAiImages && status.aiImages,
-        }),
+      const res = await buildPost({
+        briefing,
+        audience,
+        articleUrl: inputMode === 'article' && articleUrl.trim() ? articleUrl.trim() : undefined,
+        articleText: inputMode === 'article' && !articleUrl.trim() && articleText.trim() ? articleText.trim() : undefined,
+        pool: currentPool(),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'Generierung fehlgeschlagen');
-      const c = j.carousel as Carousel;
-      // mark AI-generated photos from the library
-      c.slides = c.slides.map((s) => (s.photo ? { ...s, photo: { ...s.photo, ai: library.find((p) => p.src === s.photo!.src)?.ai } } : s));
-      setCarousel(c);
-      setOverflow({});
-      setDraft(null);
-      setAiIssues(j.ok ? [] : (j.issues as Issue[]).filter((i) => i.severity === 'error'));
-      setNotice(j.ok ? `Fertig nach ${j.attempts} Versuch${j.attempts > 1 ? 'en' : ''} – bitte prüfen und anpassen.` : null);
-
-      // fill missing photos with AI images
-      const missing = c.slides.filter((s) => s.imagePrompt && !s.photo?.src);
-      if (allowAiImages && status.aiImages && missing.length) {
-        for (const [k, s] of missing.entries()) {
-          setBusy(`KI-Bild ${k + 1}/${missing.length} wird erstellt …`);
-          try {
-            const p = await generateAiImage(s.imagePrompt!);
-            updateSlide(s.id, { photo: { src: p.src, ai: true } });
-          } catch (e) {
-            setError(`KI-Bild für Slide „${s.headline ?? ''}“: ${e instanceof Error ? e.message : e}`);
-          }
-        }
-      }
+      showResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
+    }
+  }
+
+  /** One click: idea → finished post in the editor. */
+  async function createFromIdea(idea: Idea) {
+    useIdea(idea, false);
+    setError(null);
+    setNotice(null);
+    setAiIssues([]);
+    try {
+      const res = await buildPost({ briefing: ideaBriefing(idea), audience: idea.audience, pool: currentPool() });
+      showResult(res, `„${idea.title}“: `);
+      setDraftTitle(idea.title);
+      setIdeaState((m) => ({ ...m, [idea.title]: 'open' }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** All suggested ideas → finished posts, each saved as a draft. Runs in the browser, one after another. */
+  async function createAllAsDrafts() {
+    if (!ideas?.length) return;
+    const todo = ideas.filter((i) => ideaState[i.title] !== 'draft');
+    cancelBatch.current = false;
+    setBatchRunning(true);
+    setError(null);
+    setNotice(null);
+    const failed: string[] = [];
+    let done = 0;
+    try {
+      for (const [k, idea] of todo.entries()) {
+        if (cancelBatch.current) break;
+        const label = `Post ${k + 1}/${todo.length} „${idea.title}“ – `;
+        setIdeaState((m) => ({ ...m, [idea.title]: 'working' }));
+        try {
+          // no library photos here – every post gets its own AI images
+          const res = await buildPost({ briefing: ideaBriefing(idea), audience: idea.audience, pool: [] }, label, false);
+          setBusy(`${label}wird als Entwurf gespeichert …`);
+          const r = await fetch('/api/drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...res.carousel, id: newId() + newId(), title: idea.title.slice(0, 120),
+              briefing: ideaBriefing(idea), audience: idea.audience, location, updatedAt: '',
+            }),
+          });
+          if (!r.ok) throw new Error((await r.json()).error || 'Speichern fehlgeschlagen');
+          setIdeaState((m) => ({ ...m, [idea.title]: 'draft' }));
+          done++;
+        } catch (e) {
+          failed.push(`${idea.title}: ${e instanceof Error ? e.message : e}`);
+          setIdeaState((m) => ({ ...m, [idea.title]: 'failed' }));
+        }
+      }
+    } finally {
+      setBusy(null);
+      setBatchRunning(false);
+    }
+    if (failed.length) setError(`Nicht erstellt: ${failed.join(' · ')}`);
+    if (done) {
+      setNotice(`${done} Post${done > 1 ? 's' : ''} als Entwurf gespeichert – unter „Entwürfe“ öffnen, prüfen und veröffentlichen.`);
+      setShowDrafts(true);
     }
   }
 
@@ -472,18 +575,35 @@ export default function Studio() {
             {status?.aiText && (
               <div style={{ marginBottom: 12 }}>
                 <button className="btn small green" disabled={ideasBusy || !!busy} onClick={loadIdeas}>
-                  {ideasBusy ? 'Themen werden gesucht …' : ideas ? 'Neue Themen vorschlagen' : 'Themen vorschlagen'}
+                  {ideasBusy ? 'Post-Ideen werden gesucht …' : ideas ? 'Neue Posts vorschlagen' : 'Posts vorschlagen'}
                 </button>
                 {ideas && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-                    {ideas.map((idea, k) => (
-                      <div key={k} className="idea">
-                        <b>{idea.title}</b>
-                        <div className="hint">{status.audiences.find((a) => a.id === idea.audience)?.label} · {idea.format}</div>
-                        <div style={{ fontSize: 13, margin: '4px 0' }}>„{idea.hook}“</div>
-                        <button className="btn small" onClick={() => useIdea(idea)}>Übernehmen</button>
-                      </div>
-                    ))}
+                    {batchRunning ? (
+                      <button className="btn small" onClick={() => { cancelBatch.current = true; }}>Nach diesem Post stoppen</button>
+                    ) : (
+                      <button className="btn small primary" disabled={!!busy || ideas.every((i) => ideaState[i.title] === 'draft')} onClick={createAllAsDrafts}
+                        title="Erstellt jeden Vorschlag komplett (Texte + KI-Bilder) und speichert ihn als Entwurf. Dauert ca. 1–2 Minuten pro Post.">
+                        Alle als fertige Entwürfe erstellen
+                      </button>
+                    )}
+                    {ideas.map((idea, k) => {
+                      const st = ideaState[idea.title];
+                      return (
+                        <div key={k} className="idea">
+                          <b>{idea.title}</b>
+                          <div className="hint">{status.audiences.find((a) => a.id === idea.audience)?.label} · {idea.format}</div>
+                          <div style={{ fontSize: 13, margin: '4px 0' }}>„{idea.hook}“</div>
+                          {st === 'working' && <div className="hint">wird erstellt …</div>}
+                          {st === 'draft' && <div className="hint">✓ als Entwurf gespeichert</div>}
+                          {st === 'failed' && <div className="hint">✗ fehlgeschlagen</div>}
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn small primary" disabled={!!busy} onClick={() => createFromIdea(idea)}>Post erstellen</button>
+                            <button className="btn small" disabled={!!busy} onClick={() => useIdea(idea)}>Nur Briefing</button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

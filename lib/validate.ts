@@ -86,6 +86,9 @@ function slideTexts(s: Slide): { field: string; text: string }[] {
 
 /* ----------------------------------------------------------------- slide */
 
+/** "[vom Team ergänzen]", "[Name]", "XY" … – content someone still has to supply. */
+export const PLACEHOLDER = /\[[^\]]*\]|\b(?:bitte|noch|vom Team)\s+ergänzen\b|\bXY\b|\bTBD\b/i;
+
 export function validateSlide(s: Slide, i: number, total: number, o: ValidateOptions): Issue[] {
   const issues: Issue[] = [];
   const spec = templateCatalog[s.template];
@@ -103,6 +106,10 @@ export function validateSlide(s: Slide, i: number, total: number, o: ValidateOpt
     if (s[f]?.trim() && !spec.slots.some((x) => x.key === f)) {
       push(o.mode === 'ai' ? 'error' : 'warning', `Feld "${f}" gibt es im Template "${spec.id}" nicht.`, f);
     }
+  }
+  for (const f of [...SLIDE_TEXT_FIELDS, 'bullets'] as const) {
+    const val = f === 'bullets' ? (s.bullets ?? []).join(' ') : s[f] ?? '';
+    if (PLACEHOLDER.test(val)) push('error', 'Enthält einen Platzhalter – bitte echten Text einsetzen.', f);
   }
   if (spec.bullets) {
     const b = (s.bullets ?? []).map((x) => x.trim()).filter(Boolean);
@@ -172,6 +179,7 @@ export function validateCarousel(c: Carousel, o: ValidateOptions): Issue[] {
   const formal = findFormalAddress(caption);
   if (formal.length) issues.push({ severity: tone, field: 'caption', message: `Siezen in der Caption ("${formal.join('", "')}") – auf Social Media immer "du".` });
   for (const g of findGenderIssues(caption)) issues.push({ severity: tone, field: 'caption', message: g });
+  if (PLACEHOLDER.test(caption)) issues.push({ severity: 'error', field: 'caption', message: 'Caption enthält einen Platzhalter – bitte echten Text einsetzen.' });
   if (o.mode === 'ai') {
     const nums = findUnbackedNumbers(caption, o.sourceText);
     if (nums.length) issues.push({ severity: 'error', field: 'caption', message: `Zahl(en) ${nums.join(', ')} in der Caption sind nicht belegt.` });

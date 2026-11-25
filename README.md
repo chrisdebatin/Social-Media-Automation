@@ -18,6 +18,11 @@ bei Verstößen bekommt die KI die Fehlerliste zurück und korrigiert sich (max.
 6. **Auf Instagram posten** oder **ZIP herunterladen** (PNGs + `caption.txt`). Entwürfe lassen sich speichern und
    per Link an Kolleg:innen zur Freigabe schicken.
 
+**Schneller Weg: Posts vorschlagen.** Die KI schlägt passende Posts vor (Jahreszeit, Zielgruppen-Mix, nur belegte
+Fakten, keine Platzhalter). **Post erstellen** macht daraus mit einem Klick ein fertiges Karussell inkl. KI-Bildern;
+**Alle als fertige Entwürfe erstellen** baut alle Vorschläge nacheinander (ca. 1–2 Min. pro Post, Tab offen lassen)
+und speichert sie unter „Entwürfe“. Veröffentlicht wird nie automatisch – jeder Post wird vorher geprüft.
+
 Ohne API-Keys funktioniert der manuelle Modus (**Leer starten**), die Vorschau und der ZIP-Export.
 
 ## Lokal starten

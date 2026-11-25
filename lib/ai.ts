@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { audiences, headlineStyles, requiredHashtag, toneGuide, type AudienceId } from './brand';
 import { factsAsText } from './facts';
 import { CAPTION_MAX, newId, templateCatalog, templateIds, type Carousel, type Slide, type TemplateId } from './schema';
-import { errorsOnly, findFormalAddress, findUnbackedNumbers, formatIssues, validateCarousel, validateSlide, type Issue } from './validate';
+import { PLACEHOLDER, errorsOnly, findFormalAddress, findUnbackedNumbers, formatIssues, validateCarousel, validateSlide, type Issue } from './validate';
 import { layoutSlide, overflowingSlots } from './templates';
 
 export const MAX_ATTEMPTS = 3;
@@ -424,11 +424,14 @@ export async function suggestTopics(input: IdeasInput, today = new Date()): Prom
     `Schlage ${input.count} abwechslungsreiche Themen für Instagram-Karussells vor. Heute ist ${date}.`,
     input.audience ? `Zielgruppe: ${audiences[input.audience].label}` : 'Mische die Zielgruppen (Recruiting, Angehörige, Kund:innen, Community).',
     input.location ? `Standort-Bezug: ${input.location}` : '',
-    input.people.length ? `Für "Kennst du schon …"-Porträts stehen freigestellte Fotos bereit von: ${input.people.join(', ')}. Höchstens ein Porträt-Thema, Fakten zur Person nur als Platzhalter "[vom Team ergänzen]".` : '',
+    // Portraits need real facts about the person – those come from the team, not from suggestions.
+    'Keine Porträts einzelner Mitarbeiter:innen ("Kennst du schon …") – dafür fehlen echte Fakten zur Person.',
     input.hint ? `Wunsch der Redaktion: ${input.hint}` : '',
     'Berücksichtige die Jahreszeit (Wetter, Feiertage, Saison-Themen der Pflege) – aber erfinde keine konkreten Termine, Aktionstage oder Events.',
     'Mische: Ratgeber (Gesundheitskompass), Leistungen erklären, Recruiting/Benefits, Team & Werte, Entlastung für Angehörige, Mutmacher/Statement.',
-    'Jede Idee muss mit den erlaubten Fakten umsetzbar sein. Keine Zahlen außer aus der Faktenliste.',
+    'Jede Idee muss allein mit den erlaubten Fakten VOLLSTÄNDIG umsetzbar sein – daraus wird ohne Rückfrage ein fertiger Post erstellt.',
+    'Keine Platzhalter wie "[…]" oder "vom Team ergänzen", keine Inhalte, die erst jemand liefern muss. Keine Zahlen außer aus der Faktenliste.',
+    'Fotos: Es gibt keine passenden echten Fotos – beschreibe in photoIdea eine Szene, die sich als KI-Bild ohne erkennbare echte Personen umsetzen lässt.',
   ].filter(Boolean).join('\n');
 
   const res = await toolLoop<TopicIdea[]>(SYSTEM, ideasTool, msg, (raw) => {
@@ -438,6 +441,8 @@ export async function suggestTopics(input: IdeasInput, today = new Date()): Prom
     parsed.data.ideas.forEach((idea, k) => {
       const formal = findFormalAddress(`${idea.title} ${idea.hook}`);
       if (formal.length) issues.push({ severity: 'error', message: `Idee ${k + 1}: Siezen ("${formal.join('", "')}") – Social Media immer per du.` });
+      if (PLACEHOLDER.test(`${idea.title} ${idea.hook} ${idea.briefing}`))
+        issues.push({ severity: 'error', message: `Idee ${k + 1}: enthält Platzhalter – jede Idee muss ohne Ergänzung umsetzbar sein.` });
       const nums = findUnbackedNumbers(`${idea.title} ${idea.hook} ${idea.briefing}`, input.hint ?? '');
       if (nums.length) issues.push({ severity: 'error', message: `Idee ${k + 1}: Zahl(en) ${nums.join(', ')} nicht belegt.` });
     });

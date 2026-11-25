@@ -90,3 +90,22 @@ describe('carousel rules', () => {
     expect(msgs.some((m) => m.includes('Vertikale'))).toBe(true);
   });
 });
+
+describe('placeholders', () => {
+  it('flags [..] / "ergänzen" placeholders as errors in slides and caption', async () => {
+    const { validateCarousel, PLACEHOLDER } = await import('@/lib/validate');
+    expect(PLACEHOLDER.test('Rolle: [vom Team ergänzen]')).toBe(true);
+    expect(PLACEHOLDER.test('Fakt bitte ergänzen')).toBe(true);
+    expect(PLACEHOLDER.test('Wir ergänzen dein Team')).toBe(false);
+    expect(PLACEHOLDER.test('Gemeinsam. Sicher. Versorgt.')).toBe(false);
+    const res = validateCarousel(
+      {
+        slides: [{ id: 'a', template: 'text', headline: 'Das ist [Name]', body: 'Ein ganz normaler Text für dich.' }],
+        caption: 'Hallo [Standort]',
+        hashtags: ['#Pflegeunion'],
+      },
+      { mode: 'manual' },
+    );
+    expect(res.filter((i) => /Platzhalter/.test(i.message) && i.severity === 'error')).toHaveLength(2);
+  });
+});
